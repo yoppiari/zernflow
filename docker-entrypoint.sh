@@ -46,9 +46,8 @@ su - postgres -c "$PG_BIN/pg_ctl -D '$DATA_DIR' -l '$LOG_DIR/postgres.log' -o \"
 echo "[entrypoint] Syncing database roles and schema..."
 su - postgres -c "psql -d postgres -c \"
 DO \\$\\$ BEGIN
-  IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'auth' AND table_name = 'users')
-     AND NOT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'auth' AND table_name = 'identities') THEN
-    DROP SCHEMA auth CASCADE;
+  IF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'auth' AND table_name = 'identities') THEN
+    DROP SCHEMA IF EXISTS auth CASCADE;
     CREATE SCHEMA auth;
   END IF;
 END \\$\\$;\"" || true
