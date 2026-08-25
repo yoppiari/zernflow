@@ -44,16 +44,23 @@ su - postgres -c "$PG_BIN/pg_ctl -D '$DATA_DIR' -l '$LOG_DIR/postgres.log' -o \"
 
 # Always ensure roles, extensions, and schema are up to date
 echo "[entrypoint] Syncing database roles and schema..."
-su - postgres -c "psql -d postgres -c \"
-DO \\$\\$ BEGIN
-  IF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'auth' AND table_name = 'identities') THEN
-    DROP SCHEMA IF EXISTS auth CASCADE;
-  END IF;
-END \\$\\$;\"" || true
-
 if [ -f /app/supabase/init-roles.sql ]; then
   su - postgres -c "psql -v ON_ERROR_STOP=0 -f /app/supabase/init-roles.sql" || true
 fi
+
+su - postgres -c "psql -d postgres -c \"
+ALTER USER supabase_auth_admin WITH SUPERUSER PASSWORD '${PG_PASS}';
+ALTER USER authenticator WITH PASSWORD '${PG_PASS}';
+ALTER USER postgres WITH PASSWORD '${PG_PASS}';
+ALTER ROLE supabase_auth_admin SET search_path = auth, public;
+DO \\$\\$ BEGIN
+  IF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'auth' AND table_name = 'identities') THEN
+    DROP SCHEMA IF EXISTS auth CASCADE;
+    CREATE SCHEMA auth AUTHORIZATION supabase_auth_admin;
+    GRANT ALL ON SCHEMA auth TO supabase_auth_admin, postgres, service_role;
+  END IF;
+END \\$\\$;
+\"" || true
 
 # 3. Start GoTrue Auth
 echo "[entrypoint] Starting GoTrue Auth on port 9999..."
@@ -77,7 +84,7 @@ export GOTRUE_MAILER_AUTOCONFIRM="true"
 
 # Run gotrue migrate
 echo "[entrypoint] Running GoTrue migrations..."
-gotrue migrate > "$LOG_DIR/gotrue-migrate.log" 2>&1 || true
+gotrue migrate || true
 
 # Run app migrations
 if [ -f /app/supabase/migrations/ALL_MIGRATIONS.sql ]; then
