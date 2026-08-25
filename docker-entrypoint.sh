@@ -42,6 +42,12 @@ chown -R postgres:postgres "$DATA_DIR" "$LOG_DIR"
 echo "[entrypoint] Starting PostgreSQL..."
 su - postgres -c "$PG_BIN/pg_ctl -D '$DATA_DIR' -l '$LOG_DIR/postgres.log' -o \"-c listen_addresses='127.0.0.1'\" -w start"
 
+# Always ensure roles, extensions, and schema are up to date
+if [ -f /app/supabase/init-roles.sql ]; then
+  echo "[entrypoint] Syncing database roles and schema..."
+  su - postgres -c "psql -v ON_ERROR_STOP=0 -f /app/supabase/init-roles.sql" || true
+fi
+
 # 3. Start GoTrue Auth
 echo "[entrypoint] Starting GoTrue Auth on port 9999..."
 export GOTRUE_API_HOST=127.0.0.1
@@ -58,6 +64,9 @@ export GOTRUE_JWT_AUD="authenticated"
 export GOTRUE_JWT_DEFAULT_GROUP_NAME="authenticated"
 export GOTRUE_EXTERNAL_EMAIL_ENABLED="true"
 export GOTRUE_MAILER_AUTOCONFIRM="true"
+
+# Run gotrue migrate
+gotrue migrate > "$LOG_DIR/gotrue-migrate.log" 2>&1 || true
 
 gotrue > "$LOG_DIR/gotrue.log" 2>&1 &
 
