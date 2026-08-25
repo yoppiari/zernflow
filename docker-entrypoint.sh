@@ -43,7 +43,12 @@ echo "[entrypoint] Starting PostgreSQL..."
 su - postgres -c "$PG_BIN/pg_ctl -D '$DATA_DIR' -l '$LOG_DIR/postgres.log' -o \"-c listen_addresses='127.0.0.1'\" -w start"
 
 # Always ensure roles, extensions, and schema are up to date
-echo "[entrypoint] Syncing database roles and schema..."
+echo "[entrypoint] Configuring postgres trust auth and syncing schema..."
+echo "local all all trust" > "$DATA_DIR/pg_hba.conf"
+echo "host all all 127.0.0.1/32 trust" >> "$DATA_DIR/pg_hba.conf"
+echo "host all all ::1/128 trust" >> "$DATA_DIR/pg_hba.conf"
+su - postgres -c "$PG_BIN/pg_ctl -D '$DATA_DIR' reload" || true
+
 if [ -f /app/supabase/init-roles.sql ]; then
   su - postgres -c "psql -v ON_ERROR_STOP=0 -f /app/supabase/init-roles.sql" || true
 fi
