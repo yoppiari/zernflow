@@ -45,7 +45,7 @@ services:
       - GOTRUE_DB_DATABASE_URL=postgres://supabase_auth_admin:${DB_PASSWORD:-postgres_password_zernflow_secure}@zernflow-db:5432/postgres
       - GOTRUE_SITE_URL=${NEXT_PUBLIC_APP_URL:-https://flows.lumiku.com}
       - GOTRUE_URI_ALLOW_LIST=*
-      - GOTRUE_DISABLE_SIGNUP=false
+      - GOTRUE_DISABLE_SIGNUP=true
       - GOTRUE_JWT_SECRET=${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-chars-zernflow}
       - GOTRUE_JWT_EXP=3600
       - GOTRUE_JWT_ADMIN_ROLES=service_role

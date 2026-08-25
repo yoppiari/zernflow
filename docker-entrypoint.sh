@@ -45,7 +45,7 @@ export GOTRUE_DB_DRIVER=postgres
 export GOTRUE_DB_DATABASE_URL="postgres://supabase_auth_admin:${PG_PASS}@127.0.0.1:5432/postgres?sslmode=disable"
 export GOTRUE_SITE_URL="${NEXT_PUBLIC_APP_URL:-https://flows.lumiku.com}"
 export GOTRUE_URI_ALLOW_LIST="*"
-export GOTRUE_DISABLE_SIGNUP="false"
+export GOTRUE_DISABLE_SIGNUP="${GOTRUE_DISABLE_SIGNUP:-true}"
 export GOTRUE_JWT_SECRET="${JWT_SECRET}"
 export GOTRUE_JWT_EXP="3600"
 export GOTRUE_JWT_ADMIN_ROLES="service_role"
