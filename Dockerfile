@@ -1,9 +1,7 @@
-FROM node:22-alpine AS base
+FROM node:22-bookworm-slim AS base
 
 FROM base AS deps
-RUN apk add --no-cache libc6-compat
 WORKDIR /app
-
 COPY package.json package-lock.json ./
 RUN npm ci
 
@@ -15,37 +13,45 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
-# Arguments for Next.js build
-ARG NEXT_PUBLIC_SUPABASE_URL
-ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
-ARG NEXT_PUBLIC_APP_URL
+ARG NEXT_PUBLIC_APP_URL="https://flows.lumiku.com"
+ARG NEXT_PUBLIC_SUPABASE_URL="https://flows.lumiku.com/supabase-api"
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDB9.u3UJmlACRBhhRNLzzvqWfTah0lGJVYemFXzwU5sufBA"
+ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
 ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
-ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 
 RUN npm run build
 
-FROM base AS runner
+FROM node:22-bookworm-slim AS runner
 WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    postgresql \
+    postgresql-contrib \
+    ca-certificates \
+    curl \
+    wget \
+    xz-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=supabase/gotrue:v2.158.1 /usr/local/bin/gotrue /usr/local/bin/gotrue
+COPY --from=postgrest/postgrest:v12.2.0 /bin/postgrest /usr/local/bin/postgrest
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
-
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
+ENV DATA_DIR="/data/postgres"
 
 COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/supabase ./supabase
+COPY docker-entrypoint.sh ./docker-entrypoint.sh
+RUN chmod +x ./docker-entrypoint.sh
 
-RUN mkdir .next
-RUN chown nextjs:nodejs .next
-
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-
-USER nextjs
+RUN mkdir -p /data/postgres && chown -R postgres:postgres /data
 
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+ENTRYPOINT ["./docker-entrypoint.sh"]
