@@ -12,7 +12,6 @@ services:
       - "3000"
     networks:
       - coolify
-      - default
     environment:
       - SERVICE_FQDN_APP_3000=${SERVICE_FQDN_APP_3000:-https://flows.lumiku.com}
       - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-https://flows.lumiku.com}
@@ -36,7 +35,7 @@ services:
     image: supabase/gotrue:v2.158.1
     restart: unless-stopped
     networks:
-      - default
+      - coolify
     environment:
       - GOTRUE_API_HOST=0.0.0.0
       - GOTRUE_API_PORT=9999
@@ -60,7 +59,7 @@ services:
     image: postgrest/postgrest:v12.2.0
     restart: unless-stopped
     networks:
-      - default
+      - coolify
     environment:
       - PGRST_DB_URI=postgres://authenticator:${DB_PASSWORD:-postgres_password_zernflow_secure}@db:5432/postgres
       - PGRST_DB_SCHEMAS=public,storage,graphql_public
@@ -75,7 +74,7 @@ services:
     image: supabase/postgres:15.6.1.143
     restart: unless-stopped
     networks:
-      - default
+      - coolify
     environment:
       - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres_password_zernflow_secure}
       - POSTGRES_DB=postgres
@@ -95,4 +94,3 @@ volumes:
 networks:
   coolify:
     external: true
-  default:
