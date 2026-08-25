@@ -43,8 +43,17 @@ echo "[entrypoint] Starting PostgreSQL..."
 su - postgres -c "$PG_BIN/pg_ctl -D '$DATA_DIR' -l '$LOG_DIR/postgres.log' -o \"-c listen_addresses='127.0.0.1'\" -w start"
 
 # Always ensure roles, extensions, and schema are up to date
+echo "[entrypoint] Syncing database roles and schema..."
+su - postgres -c "psql -d postgres -c \"
+DO \\$\\$ BEGIN
+  IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'auth' AND table_name = 'users')
+     AND NOT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'auth' AND table_name = 'identities') THEN
+    DROP SCHEMA auth CASCADE;
+    CREATE SCHEMA auth;
+  END IF;
+END \\$\\$;\"" || true
+
 if [ -f /app/supabase/init-roles.sql ]; then
-  echo "[entrypoint] Syncing database roles and schema..."
   su - postgres -c "psql -v ON_ERROR_STOP=0 -f /app/supabase/init-roles.sql" || true
 fi
 
@@ -69,7 +78,14 @@ export GOTRUE_EXTERNAL_EMAIL_ENABLED="true"
 export GOTRUE_MAILER_AUTOCONFIRM="true"
 
 # Run gotrue migrate
+echo "[entrypoint] Running GoTrue migrations..."
 gotrue migrate > "$LOG_DIR/gotrue-migrate.log" 2>&1 || true
+
+# Run app migrations
+if [ -f /app/supabase/migrations/ALL_MIGRATIONS.sql ]; then
+  echo "[entrypoint] Syncing application schema and triggers..."
+  su - postgres -c "psql -v ON_ERROR_STOP=0 -f /app/supabase/migrations/ALL_MIGRATIONS.sql" || true
+fi
 
 # Start GoTrue server
 gotrue serve > "$LOG_DIR/gotrue.log" 2>&1 &
