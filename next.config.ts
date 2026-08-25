@@ -8,8 +8,8 @@ const nextConfig: NextConfig = {
     ],
   },
   async rewrites() {
-    const authUrl = process.env.INTERNAL_AUTH_URL || "http://auth:9999";
-    const restUrl = process.env.INTERNAL_REST_URL || "http://rest:3000";
+    const authUrl = process.env.INTERNAL_AUTH_URL || "http://zernflow-auth:9999";
+    const restUrl = process.env.INTERNAL_REST_URL || "http://zernflow-rest:3000";
 
     return [
       {

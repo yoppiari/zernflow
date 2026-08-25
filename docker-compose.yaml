@@ -1,5 +1,6 @@
 services:
   app:
+    container_name: zernflow-app
     build:
       context: .
       dockerfile: Dockerfile
@@ -11,7 +12,10 @@ services:
     expose:
       - "3000"
     networks:
-      - coolify
+      coolify:
+        aliases:
+          - app
+          - zernflow-app
     environment:
       - SERVICE_FQDN_APP_3000=${SERVICE_FQDN_APP_3000:-https://flows.lumiku.com}
       - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-https://flows.lumiku.com}
@@ -19,8 +23,8 @@ services:
       - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDB9.u3UJmlACRBhhRNLzzvqWfTah0lGJVYemFXzwU5sufBA}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6MjAwMDAwMDAwMH0.xdTcldRhvmKPkJMXRTBy4xmKr3XCRpjgRuMjDpjU0fg}
       - CRON_SECRET=${CRON_SECRET:-cron-secret-zernflow-lumiku}
-      - INTERNAL_AUTH_URL=http://auth:9999
-      - INTERNAL_REST_URL=http://rest:3000
+      - INTERNAL_AUTH_URL=http://zernflow-auth:9999
+      - INTERNAL_REST_URL=http://zernflow-rest:3000
     depends_on:
       - auth
       - rest
@@ -32,15 +36,19 @@ services:
       start_period: 30s
 
   auth:
+    container_name: zernflow-auth
     image: supabase/gotrue:v2.158.1
     restart: unless-stopped
     networks:
-      - coolify
+      coolify:
+        aliases:
+          - auth
+          - zernflow-auth
     environment:
       - GOTRUE_API_HOST=0.0.0.0
       - GOTRUE_API_PORT=9999
       - GOTRUE_DB_DRIVER=postgres
-      - GOTRUE_DB_DATABASE_URL=postgres://supabase_auth_admin:${DB_PASSWORD:-postgres_password_zernflow_secure}@db:5432/postgres
+      - GOTRUE_DB_DATABASE_URL=postgres://supabase_auth_admin:${DB_PASSWORD:-postgres_password_zernflow_secure}@zernflow-db:5432/postgres
       - GOTRUE_SITE_URL=${NEXT_PUBLIC_APP_URL:-https://flows.lumiku.com}
       - GOTRUE_URI_ALLOW_LIST=*
       - GOTRUE_DISABLE_SIGNUP=false
@@ -56,12 +64,16 @@ services:
         condition: service_healthy
 
   rest:
+    container_name: zernflow-rest
     image: postgrest/postgrest:v12.2.0
     restart: unless-stopped
     networks:
-      - coolify
+      coolify:
+        aliases:
+          - rest
+          - zernflow-rest
     environment:
-      - PGRST_DB_URI=postgres://authenticator:${DB_PASSWORD:-postgres_password_zernflow_secure}@db:5432/postgres
+      - PGRST_DB_URI=postgres://authenticator:${DB_PASSWORD:-postgres_password_zernflow_secure}@zernflow-db:5432/postgres
       - PGRST_DB_SCHEMAS=public,storage,graphql_public
       - PGRST_DB_ANON_ROLE=anon
       - PGRST_JWT_SECRET=${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-chars-zernflow}
@@ -71,10 +83,14 @@ services:
         condition: service_healthy
 
   db:
+    container_name: zernflow-db
     image: supabase/postgres:15.6.1.143
     restart: unless-stopped
     networks:
-      - coolify
+      coolify:
+        aliases:
+          - db
+          - zernflow-db
     environment:
       - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres_password_zernflow_secure}
       - POSTGRES_DB=postgres
