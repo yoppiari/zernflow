@@ -8,12 +8,17 @@ const nextConfig: NextConfig = {
     ],
   },
   async rewrites() {
+    const authUrl = process.env.INTERNAL_AUTH_URL || "http://auth:9999";
+    const restUrl = process.env.INTERNAL_REST_URL || "http://rest:3000";
+
     return [
       {
-        source: "/supabase-api/:path*",
-        destination: process.env.INTERNAL_SUPABASE_URL
-          ? `${process.env.INTERNAL_SUPABASE_URL}/:path*`
-          : "http://kong:8000/:path*",
+        source: "/supabase-api/auth/v1/:path*",
+        destination: `${authUrl}/:path*`,
+      },
+      {
+        source: "/supabase-api/rest/v1/:path*",
+        destination: `${restUrl}/:path*`,
       },
     ];
   },
