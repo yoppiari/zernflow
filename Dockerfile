@@ -12,6 +12,7 @@ COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
+ENV NODE_OPTIONS="--max-old-space-size=2048"
 
 ARG NEXT_PUBLIC_APP_URL="https://flows.lumiku.com"
 ARG NEXT_PUBLIC_SUPABASE_URL="https://flows.lumiku.com/supabase-api"
@@ -47,6 +48,7 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/supabase ./supabase
+COPY --from=builder /app/scripts ./scripts
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
 
