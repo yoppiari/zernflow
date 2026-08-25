@@ -1,0 +1,2 @@
+FROM supabase/postgres:15.6.1.143
+COPY supabase/migrations/ALL_MIGRATIONS.sql /docker-entrypoint-initdb.d/99-zernflow.sql
