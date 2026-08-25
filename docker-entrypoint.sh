@@ -50,8 +50,10 @@ fi
 
 # 3. Start GoTrue Auth
 echo "[entrypoint] Starting GoTrue Auth on port 9999..."
-export GOTRUE_API_HOST=127.0.0.1
+export GOTRUE_API_HOST=0.0.0.0
 export GOTRUE_API_PORT=9999
+export GOTRUE_API_EXTERNAL_URL="${NEXT_PUBLIC_SUPABASE_URL:-https://flows.lumiku.com/supabase-api}/auth/v1"
+export API_EXTERNAL_URL="${NEXT_PUBLIC_SUPABASE_URL:-https://flows.lumiku.com/supabase-api}/auth/v1"
 export GOTRUE_DB_DRIVER=postgres
 export GOTRUE_DB_DATABASE_URL="postgres://supabase_auth_admin:${PG_PASS}@127.0.0.1:5432/postgres?sslmode=disable"
 export GOTRUE_SITE_URL="${NEXT_PUBLIC_APP_URL:-https://flows.lumiku.com}"
