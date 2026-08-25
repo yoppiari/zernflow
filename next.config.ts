@@ -19,10 +19,6 @@ const nextConfig: NextConfig = {
 
     return [
       {
-        source: "/supabase-api/auth/v1/:path*",
-        destination: `${authUrl}/:path*`,
-      },
-      {
         source: "/supabase-api/rest/v1/:path*",
         destination: `${restUrl}/:path*`,
       },
