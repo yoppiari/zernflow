@@ -48,7 +48,6 @@ su - postgres -c "psql -d postgres -c \"
 DO \\$\\$ BEGIN
   IF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'auth' AND table_name = 'identities') THEN
     DROP SCHEMA IF EXISTS auth CASCADE;
-    CREATE SCHEMA auth;
   END IF;
 END \\$\\$;\"" || true
 
