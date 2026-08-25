@@ -68,7 +68,8 @@ export GOTRUE_MAILER_AUTOCONFIRM="true"
 # Run gotrue migrate
 gotrue migrate > "$LOG_DIR/gotrue-migrate.log" 2>&1 || true
 
-gotrue > "$LOG_DIR/gotrue.log" 2>&1 &
+# Start GoTrue server
+gotrue serve > "$LOG_DIR/gotrue.log" 2>&1 &
 
 # 4. Start PostgREST
 echo "[entrypoint] Starting PostgREST on port 3001..."
