@@ -25,6 +25,10 @@ GRANT anon TO authenticator;
 GRANT authenticated TO authenticator;
 GRANT service_role TO authenticator;
 
+ALTER ROLE supabase_auth_admin SET search_path = auth, public;
+ALTER ROLE authenticator SET search_path = public, auth, storage, graphql_public;
+ALTER ROLE postgres SET search_path = public, auth, storage, graphql_public;
+
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
