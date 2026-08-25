@@ -2,18 +2,23 @@
 set -e
 
 DATA_DIR="${DATA_DIR:-/data/postgres}"
+LOG_DIR="${LOG_DIR:-/data/logs}"
 PG_PASS="${DB_PASSWORD:-postgres_password_zernflow_secure}"
 JWT_SECRET="${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-chars-zernflow}"
 
+PG_BIN="$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | tail -n 1)"
+export PATH="$PG_BIN:$PATH"
+
+mkdir -p "$DATA_DIR" "$LOG_DIR"
+chown -R postgres:postgres "$DATA_DIR" "$LOG_DIR"
+
 # 1. Initialize PostgreSQL if not initialized
-if [ ! -d "$DATA_DIR" ] || [ -z "$(ls -A "$DATA_DIR" 2>/dev/null)" ]; then
+if [ -z "$(ls -A "$DATA_DIR" 2>/dev/null)" ]; then
   echo "[entrypoint] Initializing new PostgreSQL database in $DATA_DIR..."
-  mkdir -p "$DATA_DIR"
-  chown -R postgres:postgres "$DATA_DIR"
-  su - postgres -c "/usr/lib/postgresql/*/bin/initdb -D $DATA_DIR"
+  su - postgres -c "$PG_BIN/initdb -D '$DATA_DIR'"
 
   # Start temporary postgres for initialization
-  su - postgres -c "/usr/lib/postgresql/*/bin/pg_ctl -D $DATA_DIR -o \"-c listen_addresses='127.0.0.1'\" -w start"
+  su - postgres -c "$PG_BIN/pg_ctl -D '$DATA_DIR' -l '$LOG_DIR/postgres.log' -o \"-c listen_addresses='127.0.0.1'\" -w start"
 
   # Execute initial roles and auth schema
   if [ -f /app/supabase/init-roles.sql ]; then
@@ -28,14 +33,14 @@ if [ ! -d "$DATA_DIR" ] || [ -z "$(ls -A "$DATA_DIR" 2>/dev/null)" ]; then
   fi
 
   # Stop temporary postgres
-  su - postgres -c "/usr/lib/postgresql/*/bin/pg_ctl -D $DATA_DIR -m fast -w stop"
+  su - postgres -c "$PG_BIN/pg_ctl -D '$DATA_DIR' -m fast -w stop"
 fi
 
-chown -R postgres:postgres "$DATA_DIR"
+chown -R postgres:postgres "$DATA_DIR" "$LOG_DIR"
 
 # 2. Start PostgreSQL
 echo "[entrypoint] Starting PostgreSQL..."
-su - postgres -c "/usr/lib/postgresql/*/bin/pg_ctl -D $DATA_DIR -l /var/log/postgres.log -o \"-c listen_addresses='127.0.0.1'\" -w start"
+su - postgres -c "$PG_BIN/pg_ctl -D '$DATA_DIR' -l '$LOG_DIR/postgres.log' -o \"-c listen_addresses='127.0.0.1'\" -w start"
 
 # 3. Start GoTrue Auth
 echo "[entrypoint] Starting GoTrue Auth on port 9999..."
@@ -54,7 +59,7 @@ export GOTRUE_JWT_DEFAULT_GROUP_NAME="authenticated"
 export GOTRUE_EXTERNAL_EMAIL_ENABLED="true"
 export GOTRUE_MAILER_AUTOCONFIRM="true"
 
-gotrue > /var/log/gotrue.log 2>&1 &
+gotrue > "$LOG_DIR/gotrue.log" 2>&1 &
 
 # 4. Start PostgREST
 echo "[entrypoint] Starting PostgREST on port 3001..."
@@ -66,15 +71,15 @@ export PGRST_SERVER_HOST="127.0.0.1"
 export PGRST_SERVER_PORT="3001"
 export PGRST_DB_USE_LEGACY_GUCS="false"
 
-postgrest > /var/log/postgrest.log 2>&1 &
+postgrest > "$LOG_DIR/postgrest.log" 2>&1 &
 
 # Wait for services to be ready
 sleep 3
 
 # Check if gotrue and postgrest are running
 echo "[entrypoint] Verifying internal services..."
-curl -s http://127.0.0.1:9999/health || (echo "GoTrue log:" && cat /var/log/gotrue.log)
-curl -s http://127.0.0.1:3001/ || (echo "PostgREST log:" && cat /var/log/postgrest.log)
+curl -s http://127.0.0.1:9999/health || (echo "GoTrue log:" && cat "$LOG_DIR/gotrue.log")
+curl -s http://127.0.0.1:3001/ || (echo "PostgREST log:" && cat "$LOG_DIR/postgrest.log")
 
 # 5. Provision Default Admin User if specified
 ADMIN_EMAIL="${ADMIN_EMAIL:-yoppi.ari@gmail.com}"
