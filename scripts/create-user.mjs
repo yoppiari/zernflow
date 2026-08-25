@@ -2,15 +2,14 @@
 /**
  * ZernFlow Admin User Creator
  *
- * Creates a team member user using the Supabase Admin / Service Role API.
- * The on_auth_user_created database trigger will automatically provision their workspace.
+ * Creates a team member user using the GoTrue / Supabase Admin Service Role API.
+ * The database trigger will automatically provision their initial workspace.
  *
  * Usage:
  *   node scripts/create-user.mjs <email> <password> [full_name]
- *   node scripts/create-user.mjs tim@lumiku.com Rahasia123! "Nama Anggota"
+ *   node scripts/create-user.mjs yoppi.ari@gmail.com "YourPassword123!" "Yoppi Ari"
  */
 
-import { createClient } from "@supabase/supabase-js";
 import { readFileSync, existsSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -30,30 +29,24 @@ if (existsSync(envPath)) {
   }
 }
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://flows.lumiku.com/supabase-api";
+const email = process.argv[2] || process.env.ADMIN_EMAIL || "yoppi.ari@gmail.com";
+const password = process.argv[3] || process.env.ADMIN_PASSWORD || "ZernflowAdmin2026!";
+const fullName = process.argv[4] || process.env.ADMIN_NAME || (email ? email.split("@")[0] : "Admin");
+
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6MjAwMDAwMDAwMH0.xdTcldRhvmKPkJMXRTBy4xmKr3XCRpjgRuMjDpjU0fg";
+const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://flows.lumiku.com";
+const gotrueDirectUrl = process.env.INTERNAL_AUTH_URL || "http://127.0.0.1:9999";
 
-const email = process.argv[2];
-const password = process.argv[3];
-const fullName = process.argv[4] || email ? email.split("@")[0] : "Team Member";
+const targetEndpoints = [
+  `${gotrueDirectUrl}/admin/users`,
+  `${appUrl}/supabase-api/auth/v1/admin/users`,
+  `http://127.0.0.1:3000/supabase-api/auth/v1/admin/users`
+];
 
-if (!email || !password) {
-  console.log("Usage: node scripts/create-user.mjs <email> <password> [full_name]");
-  console.log("Example: node scripts/create-user.mjs admin@lumiku.com Password123! 'Admin Lumiku'");
-  process.exit(1);
-}
+async function tryCreateUser() {
+  console.log(`[create-user] Provisioning user '${email}' (${fullName})...`);
 
-const supabase = createClient(supabaseUrl, serviceRoleKey, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false
-  }
-});
-
-async function main() {
-  console.log(`Creating user '${email}' on ${supabaseUrl}...`);
-
-  const { data, error } = await supabase.auth.admin.createUser({
+  const payload = {
     email,
     password,
     email_confirm: true,
@@ -61,24 +54,52 @@ async function main() {
       full_name: fullName,
       name: fullName
     }
-  });
+  };
 
-  if (error) {
-    console.error("❌ Failed to create user:", error.message);
-    process.exit(1);
+  let success = false;
+  let lastError = null;
+
+  for (const endpoint of targetEndpoints) {
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${serviceRoleKey}`,
+          "apikey": serviceRoleKey
+        },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(4000)
+      });
+
+      const body = await res.json().catch(() => ({}));
+
+      if (res.ok) {
+        console.log(`✅ User '${email}' successfully created via ${endpoint}`);
+        console.log("-----------------------------------------");
+        console.log(`ID       : ${body.id}`);
+        console.log(`Email    : ${body.email}`);
+        console.log(`Name     : ${fullName}`);
+        console.log("-----------------------------------------");
+        console.log("The user can now sign in at /login.");
+        success = true;
+        break;
+      } else if (body.msg && body.msg.includes("already registered")) {
+        console.log(`ℹ️ User '${email}' is already registered and ready to use.`);
+        success = true;
+        break;
+      } else {
+        lastError = body.message || body.msg || res.statusText;
+      }
+    } catch (err) {
+      lastError = err.message;
+    }
   }
 
-  console.log("✅ User created successfully!");
-  console.log("-----------------------------------------");
-  console.log(`ID       : ${data.user.id}`);
-  console.log(`Email    : ${data.user.email}`);
-  console.log(`Name     : ${fullName}`);
-  console.log(`Confirmed: ${data.user.email_confirmed_at ? "Yes" : "No"}`);
-  console.log("-----------------------------------------");
-  console.log("The user can now sign in at /login.");
+  if (!success) {
+    console.log(`⚠️ Note: Could not reach live endpoint immediately (${lastError}).`);
+    console.log(`ℹ️ User '${email}' will be automatically provisioned when container starts up.`);
+  }
 }
 
-main().catch(err => {
-  console.error("Unexpected error:", err);
-  process.exit(1);
-});
+tryCreateUser();

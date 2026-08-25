@@ -76,7 +76,29 @@ echo "[entrypoint] Verifying internal services..."
 curl -s http://127.0.0.1:9999/health || (echo "GoTrue log:" && cat /var/log/gotrue.log)
 curl -s http://127.0.0.1:3001/ || (echo "PostgREST log:" && cat /var/log/postgrest.log)
 
-# 5. Start Next.js App
+# 5. Provision Default Admin User if specified
+ADMIN_EMAIL="${ADMIN_EMAIL:-yoppi.ari@gmail.com}"
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-ZernflowAdmin2026!}"
+ADMIN_NAME="${ADMIN_NAME:-Yoppi Ari}"
+
+if [ -n "$ADMIN_EMAIL" ] && [ -n "$ADMIN_PASSWORD" ]; then
+  echo "[entrypoint] Provisioning admin user $ADMIN_EMAIL..."
+  curl -s -X POST "http://127.0.0.1:9999/admin/users" \
+    -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6MjAwMDAwMDAwMH0.xdTcldRhvmKPkJMXRTBy4xmKr3XCRpjgRuMjDpjU0fg}" \
+    -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6MjAwMDAwMDAwMH0.xdTcldRhvmKPkJMXRTBy4xmKr3XCRpjgRuMjDpjU0fg}" \
+    -H "Content-Type: application/json" \
+    -d "{
+      \"email\": \"$ADMIN_EMAIL\",
+      \"password\": \"$ADMIN_PASSWORD\",
+      \"email_confirm\": true,
+      \"user_metadata\": {
+        \"full_name\": \"$ADMIN_NAME\",
+        \"name\": \"$ADMIN_NAME\"
+      }
+    }" || echo "[entrypoint] Admin user may already exist."
+fi
+
+# 6. Start Next.js App
 echo "[entrypoint] Starting Next.js App on port 3000..."
 export INTERNAL_AUTH_URL="http://127.0.0.1:9999"
 export INTERNAL_REST_URL="http://127.0.0.1:3001"
