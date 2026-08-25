@@ -58,14 +58,28 @@ ALTER USER supabase_auth_admin WITH SUPERUSER PASSWORD '${PG_PASS}';
 ALTER USER authenticator WITH PASSWORD '${PG_PASS}';
 ALTER USER postgres WITH PASSWORD '${PG_PASS}';
 ALTER ROLE supabase_auth_admin SET search_path = auth, public;
-ALTER DATABASE postgres SET search_path = auth, public, storage;
+ALTER DATABASE postgres SET search_path = public, auth, storage;
 DO \\$\\$ BEGIN
-  IF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'auth' AND table_name = 'identities') THEN
+  IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'auth' AND table_name = 'workspaces')
+     OR NOT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'auth' AND table_name = 'identities') THEN
     DROP SCHEMA IF EXISTS auth CASCADE;
-    CREATE SCHEMA auth AUTHORIZATION supabase_auth_admin;
-    GRANT ALL ON SCHEMA auth TO supabase_auth_admin, postgres, service_role;
   END IF;
 END \\$\\$;
+\"" || true
+
+# Import official GoTrue schema if auth was dropped/empty
+if [ -f /app/supabase/gotrue-schema.sql ]; then
+  echo "[entrypoint] Ensuring complete GoTrue auth schema..."
+  su - postgres -c "psql -v ON_ERROR_STOP=0 -d postgres -f /app/supabase/gotrue-schema.sql" || true
+fi
+
+# Ensure all permissions on auth tables
+su - postgres -c "psql -d postgres -c \"
+GRANT ALL ON SCHEMA auth TO supabase_auth_admin, postgres, service_role;
+GRANT ALL ON ALL TABLES IN SCHEMA auth TO supabase_auth_admin, postgres, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA auth TO supabase_auth_admin, postgres, service_role;
+GRANT ALL ON ALL ROUTINES IN SCHEMA auth TO supabase_auth_admin, postgres, service_role;
+GRANT SELECT ON auth.users TO authenticated, anon;
 \"" || true
 
 # 3. Start GoTrue Auth
@@ -88,14 +102,10 @@ export GOTRUE_JWT_DEFAULT_GROUP_NAME="authenticated"
 export GOTRUE_EXTERNAL_EMAIL_ENABLED="true"
 export GOTRUE_MAILER_AUTOCONFIRM="true"
 
-# Run gotrue migrate
-echo "[entrypoint] Running GoTrue migrations..."
-gotrue migrate || true
-
 # Run app migrations
 if [ -f /app/supabase/migrations/ALL_MIGRATIONS.sql ]; then
-  echo "[entrypoint] Syncing application schema and triggers..."
-  su - postgres -c "psql -v ON_ERROR_STOP=0 -f /app/supabase/migrations/ALL_MIGRATIONS.sql" || true
+  echo "[entrypoint] Syncing application schema and triggers in public schema..."
+  su - postgres -c "psql -v ON_ERROR_STOP=0 -d postgres -c 'SET search_path = public, auth;' -f /app/supabase/migrations/ALL_MIGRATIONS.sql" || true
 fi
 
 # Start GoTrue server
