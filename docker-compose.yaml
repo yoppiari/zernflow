@@ -1,0 +1,90 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-https://flows.lumiku.com}
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-https://flows.lumiku.com/supabase-api}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDB9.u3UJmlACRBhhRNLzzvqWfTah0lGJVYemFXzwU5sufBA}
+    restart: unless-stopped
+    environment:
+      - SERVICE_FQDN_APP_3000=${SERVICE_FQDN_APP_3000:-https://flows.lumiku.com}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-https://flows.lumiku.com}
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-https://flows.lumiku.com/supabase-api}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDB9.u3UJmlACRBhhRNLzzvqWfTah0lGJVYemFXzwU5sufBA}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6MjAwMDAwMDAwMH0.xdTcldRhvmKPkJMXRTBy4xmKr3XCRpjgRuMjDpjU0fg}
+      - CRON_SECRET=${CRON_SECRET:-cron-secret-zernflow-lumiku}
+      - INTERNAL_SUPABASE_URL=http://kong:8000
+    depends_on:
+      - kong
+
+  kong:
+    image: kong:2.8.1-alpine
+    restart: unless-stopped
+    environment:
+      - KONG_DATABASE=off
+      - KONG_DECLARATIVE_CONFIG=/var/lib/kong/kong.yml
+      - KONG_DNS_ORDER=LAST,A,CNAME
+      - KONG_PLUGINS=request-transformer,cors,key-auth,acl,basic-auth
+      - KONG_NGINX_HTTP_PROXY_BUFFER_SIZE=128k
+      - KONG_NGINX_HTTP_PROXY_BUFFERS=4 256k
+    volumes:
+      - ./supabase/kong.yml:/var/lib/kong/kong.yml:ro
+    depends_on:
+      - auth
+      - rest
+
+  auth:
+    image: supabase/gotrue:v2.158.1
+    restart: unless-stopped
+    environment:
+      - GOTRUE_API_HOST=0.0.0.0
+      - GOTRUE_API_PORT=9999
+      - GOTRUE_DB_DRIVER=postgres
+      - GOTRUE_DB_DATABASE_URL=postgres://supabase_auth_admin:${DB_PASSWORD:-postgres_password_zernflow_secure}@db:5432/postgres
+      - GOTRUE_SITE_URL=${NEXT_PUBLIC_APP_URL:-https://flows.lumiku.com}
+      - GOTRUE_URI_ALLOW_LIST=*
+      - GOTRUE_DISABLE_SIGNUP=false
+      - GOTRUE_JWT_SECRET=${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-chars-zernflow}
+      - GOTRUE_JWT_EXP=3600
+      - GOTRUE_JWT_ADMIN_ROLES=service_role
+      - GOTRUE_JWT_AUD=authenticated
+      - GOTRUE_JWT_DEFAULT_GROUP_NAME=authenticated
+      - GOTRUE_EXTERNAL_EMAIL_ENABLED=true
+      - GOTRUE_MAILER_AUTOCONFIRM=true
+    depends_on:
+      db:
+        condition: service_healthy
+
+  rest:
+    image: postgrest/postgrest:v12.2.0
+    restart: unless-stopped
+    environment:
+      - PGRST_DB_URI=postgres://authenticator:${DB_PASSWORD:-postgres_password_zernflow_secure}@db:5432/postgres
+      - PGRST_DB_SCHEMAS=public,storage,graphql_public
+      - PGRST_DB_ANON_ROLE=anon
+      - PGRST_JWT_SECRET=${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-chars-zernflow}
+      - PGRST_DB_USE_LEGACY_GUCS=false
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: supabase/postgres:15.6.1.143
+    restart: unless-stopped
+    environment:
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres_password_zernflow_secure}
+      - POSTGRES_DB=postgres
+      - JWT_SECRET=${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-chars-zernflow}
+    volumes:
+      - zernflow_db_data:/var/lib/postgresql/data
+      - ./supabase/migrations/ALL_MIGRATIONS.sql:/docker-entrypoint-initdb.d/99-zernflow.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  zernflow_db_data:
